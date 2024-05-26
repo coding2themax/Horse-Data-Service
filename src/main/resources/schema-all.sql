@@ -8,3 +8,5 @@ CREATE TABLE stable.horses (
   coat_pattern VARCHAR(255),
   training_level VARCHAR(255)
 );
+
+INSERT INTO stable.horses (horse_id, horse_name, breed, age, color, coat_pattern, training_level) VALUES (1, 'Horse1', 'Thoroughbred', 5, 'Brown', 'Solid', 'Advanced'), (2, 'Horse2', 'Quarter Horse', 8, 'Chestnut', 'Spotted', 'Intermediate'), (3, 'Horse3', 'Arabian', 4, 'Gray', 'Pinto', 'Beginner'); 

@@ -3,17 +3,20 @@ package com.coding2themax.horse.horsedataservice.model;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;
 import org.springframework.data.domain.Persistable;
+import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 import org.springframework.lang.Nullable;
 
 /**
  * Represents a horse.
  */
-@Table(value = "horse", schema = "horse")
+@Table(value = "horses", schema = "stable")
 public class Horse implements Persistable<Integer> {
 
   @Id
+  @Column("horse_id")
   private Integer id;
+  @Column("horse_name")
   private String name;
   private String breed;
   private String color;
