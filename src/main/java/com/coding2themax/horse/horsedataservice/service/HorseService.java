@@ -1,20 +1,19 @@
 package com.coding2themax.horse.horsedataservice.service;
 
-import java.util.List;
 import com.coding2themax.horse.horsedataservice.model.Horse;
+
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 //create an interface called HorseService
 public interface HorseService {
-  /**
-   * Represents a horse.
-   */
-  Horse createHorse(Horse horse);
+  Mono<Horse> createHorse(Horse horse);
 
-  Horse getHorseById(Integer id);
+  Mono<Horse> updateHorse(String id, Horse horse);
 
-  List<Horse> getAllHorses();
+  Mono<Void> deleteHorse(String id);
 
-  Horse updateHorse(Integer id, Horse horse);
+  Mono<Horse> getHorseById(String id);
 
-  void deleteHorse(Integer id);
+  Flux<Horse> getAllHorses();
 }

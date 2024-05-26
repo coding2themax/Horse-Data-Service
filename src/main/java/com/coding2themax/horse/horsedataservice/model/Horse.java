@@ -6,6 +6,9 @@ import org.springframework.data.domain.Persistable;
 import org.springframework.data.relational.core.mapping.Table;
 import org.springframework.lang.Nullable;
 
+/**
+ * Represents a horse.
+ */
 @Table(value = "horse", schema = "horse")
 public class Horse implements Persistable<Integer> {
 
