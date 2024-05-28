@@ -52,18 +52,6 @@ public class HorseReactiveRepoServiceTest {
   }
 
   @Test
-  void testDeleteHorse() {
-    Horse horse = new Horse();
-    horse.setId(1);
-    BDDMockito.when(horseRepository.findById(1)).thenReturn(Mono.just(horse));
-    BDDMockito.when(horseRepository.delete(horse)).thenReturn(Mono.empty());
-    horseReactiveRepoService.deleteHorse("1").block();
-    BDDMockito.verify(horseRepository).delete(horse);
-    // StepVerifier.create(horseReactiveRepoService.deleteHorse("1"))
-    // .verifyComplete();
-  }
-
-  @Test
   void testGetAllHorses() {
     Horse horse1 = new Horse();
     horse1.setName("Max");

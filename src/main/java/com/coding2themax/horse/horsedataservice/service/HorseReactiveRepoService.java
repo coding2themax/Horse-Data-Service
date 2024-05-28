@@ -38,11 +38,6 @@ public class HorseReactiveRepoService implements HorseService {
   }
 
   @Override
-  public Mono<Void> deleteHorse(String id) {
-    return horseRepository.deleteById(Integer.valueOf(id));
-  }
-
-  @Override
   public Mono<Horse> getHorseById(String id) {
     return horseRepository.findById(Integer.valueOf(id));
   }
