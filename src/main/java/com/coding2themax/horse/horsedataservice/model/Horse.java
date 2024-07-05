@@ -1,5 +1,7 @@
 package com.coding2themax.horse.horsedataservice.model;
 
+import java.util.Map;
+
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;
 import org.springframework.data.domain.Persistable;
@@ -95,4 +97,15 @@ public class Horse implements Persistable<Integer> {
     this.trainingLevel = trainingLevel;
   }
 
+  public static Horse fromRow(Map<String, Object> row) {
+    Horse horse = new Horse();
+    horse.setId((Integer) row.get("id"));
+    horse.setName((String) row.get("name"));
+    horse.setBreed((String) row.get("breed"));
+    horse.setColor((String) row.get("color"));
+    horse.setAge((Integer) row.get("age"));
+    horse.setCoatPattern((String) row.get("coat_pattern"));
+    horse.setTrainingLevel((String) row.get("training_level"));
+    return horse;
+  }
 }
