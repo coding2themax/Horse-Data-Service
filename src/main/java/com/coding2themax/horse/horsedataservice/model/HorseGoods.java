@@ -7,13 +7,13 @@ import org.springframework.data.relational.core.mapping.Column;
 @Table(value = "horse_goods", schema = "stable")
 public class HorseGoods {
   @Id
-  @Column(value = "id")
+  @Column(value = "goods_id")
   private Long id;
 
-  @Column(value = "name")
+  @Column(value = "goods_name")
   private String name;
 
-  @Column(value = "price")
+  @Column(value = "good_description")
   private String description;
 
   // Add getters and setters

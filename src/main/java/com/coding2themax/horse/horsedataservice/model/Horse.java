@@ -18,6 +18,9 @@ public class Horse implements Persistable<Integer> {
   @Id
   @Column("horse_id")
   private Integer id;
+
+  @Column("horse_status_id")
+  private Integer statusID;
   @Column("horse_name")
   private String name;
   private String breed;
@@ -25,6 +28,14 @@ public class Horse implements Persistable<Integer> {
   private Integer age;
   private String coatPattern;
   private String trainingLevel;
+
+  public Integer getStatusID() {
+    return statusID;
+  }
+
+  public void setStatusID(Integer statusID) {
+    this.statusID = statusID;
+  }
 
   @Transient
   private boolean newHorse;

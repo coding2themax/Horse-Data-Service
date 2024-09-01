@@ -59,4 +59,18 @@ public class HorseReactiveRepoService implements HorseService {
       return this.horseRepository.save(h);
     }).switchIfEmpty(this.horseRepository.save(horse));
   }
+
+  @Override
+  public Flux<Horse> getHorsesByStatus(String status) {
+    return horseRepository.findByStatus(Integer.parseInt(status));
+  }
+
+  @Override
+  public Mono<Horse> deleteHorse(String id) {
+
+    return horseRepository.findById(Integer.valueOf(id)).flatMap(h -> {
+      h.setStatusID(2);
+      return horseRepository.save(h);
+    });
+  }
 }
