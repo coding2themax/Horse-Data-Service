@@ -55,6 +55,20 @@ public class HorseRouterTest {
   }
 
   @Test
+  void testGetHorseByStatusID() {
+    webTestClient
+        // Create a GET request to test an endpoint
+        .get().uri("/horses/status/1")
+        .accept(MediaType.APPLICATION_JSON)
+        .exchange()
+        // and use the dedicated DSL to test assertions against the response
+        .expectStatus().isOk()
+        .expectBodyList(Horse.class).value(h -> {
+          Assertions.assertEquals(2, h.size());
+        });
+  }
+
+  @Test
   void testCreateHorse() {
     Horse horse = new Horse();
     horse.setName("Max");
