@@ -19,7 +19,6 @@ import com.coding2themax.horse.horsedataservice.repository.HorseRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @ExtendWith(MockitoExtension.class)
 public class HorseReactiveRepoServiceTest {

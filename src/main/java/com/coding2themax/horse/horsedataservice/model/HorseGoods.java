@@ -2,13 +2,14 @@ package com.coding2themax.horse.horsedataservice.model;
 
 import org.springframework.data.relational.core.mapping.Table;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.domain.Persistable;
 import org.springframework.data.relational.core.mapping.Column;
 
 @Table(value = "horse_goods", schema = "stable")
-public class HorseGoods {
+public class HorseGoods implements Persistable<Integer> {
   @Id
   @Column(value = "goods_id")
-  private Long id;
+  private Integer id;
 
   @Column(value = "goods_name")
   private String name;
@@ -17,11 +18,11 @@ public class HorseGoods {
   private String description;
 
   // Add getters and setters
-  public Long getId() {
+  public Integer getId() {
     return id;
   }
 
-  public void setId(Long id) {
+  public void setId(Integer id) {
     this.id = id;
   }
 
@@ -41,7 +42,9 @@ public class HorseGoods {
     this.description = description;
   }
 
-  // Add constructors
+  @Override
+  public boolean isNew() {
+    throw new UnsupportedOperationException("Unimplemented method 'isNew'");
+  }
 
-  // Add toString method
 }
