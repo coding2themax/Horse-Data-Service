@@ -2,22 +2,9 @@
 spring:
   application:
     name: horse-data-service
-  jpa:
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
-    hibernate:
-      ddl-auto: update
-    properties:
-      javax:
-        persistance:
-          scripts:
-            action: create
-            create-target: schema-all.sql
-            create-source: metedata
-
   r2dbc:
-    url: ${postgres-url}
-    username: ${postgres-username}
-    password: ${postgres-password}
-
+    url: ${DATABASE_HOST}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
 server:
   port: 13000

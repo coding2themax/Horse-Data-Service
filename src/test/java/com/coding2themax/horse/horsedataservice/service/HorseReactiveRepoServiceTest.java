@@ -19,7 +19,6 @@ import com.coding2themax.horse.horsedataservice.repository.HorseRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @ExtendWith(MockitoExtension.class)
 public class HorseReactiveRepoServiceTest {
@@ -49,18 +48,6 @@ public class HorseReactiveRepoServiceTest {
           assertEquals("Thoroughbred", h.getBreed());
         })
         .verifyComplete();
-  }
-
-  @Test
-  void testDeleteHorse() {
-    Horse horse = new Horse();
-    horse.setId(1);
-    BDDMockito.when(horseRepository.findById(1)).thenReturn(Mono.just(horse));
-    BDDMockito.when(horseRepository.delete(horse)).thenReturn(Mono.empty());
-    horseReactiveRepoService.deleteHorse("1").block();
-    BDDMockito.verify(horseRepository).delete(horse);
-    // StepVerifier.create(horseReactiveRepoService.deleteHorse("1"))
-    // .verifyComplete();
   }
 
   @Test

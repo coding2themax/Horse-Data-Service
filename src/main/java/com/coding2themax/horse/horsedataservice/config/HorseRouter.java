@@ -15,6 +15,10 @@ public class HorseRouter {
   public RouterFunction<ServerResponse> route(HorseHandler horseHandler) {
     return RouterFunctions.route()
         .GET("/horses", horseHandler::getAllHorses)
+        .POST("/horses", horseHandler::createHorse)
+        .GET("/horses/{id}", horseHandler::getHorseById)
+        .GET("/horses/status/{status}", horseHandler::getHorsesByStatusID)
+        .DELETE("horses/{id}", horseHandler::deleteHorse)
         .build();
   }
 

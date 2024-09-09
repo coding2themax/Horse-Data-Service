@@ -11,9 +11,12 @@ public interface HorseService {
 
   Mono<Horse> updateHorse(String id, Horse horse);
 
-  Mono<Void> deleteHorse(String id);
-
   Mono<Horse> getHorseById(String id);
 
   Flux<Horse> getAllHorses();
+
+  Flux<Horse> getHorsesByStatus(String status);
+
+  Mono<Horse> deleteHorse(String id);
+
 }
