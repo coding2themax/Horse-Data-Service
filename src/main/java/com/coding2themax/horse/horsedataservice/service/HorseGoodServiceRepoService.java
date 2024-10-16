@@ -24,7 +24,12 @@ public class HorseGoodServiceRepoService implements HorseGoodService {
 
   @Override
   public Mono<HorseGoods> updateHorseGood(HorseGoods horseGood) {
-    return horseGoodRepository.save(horseGood);
+
+    return horseGoodRepository.findById(horseGood.getId()).flatMap(h -> {
+      h.setName(horseGood.getName());
+      h.setDescription(horseGood.getDescription());
+      return horseGoodRepository.save(h);
+    });
   }
 
   @Override

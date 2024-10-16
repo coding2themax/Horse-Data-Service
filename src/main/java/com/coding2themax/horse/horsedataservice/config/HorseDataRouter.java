@@ -9,12 +9,12 @@ import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerResponse;
 
+import com.coding2themax.horse.horsedataservice.handlers.HorseGoodHandler;
 import com.coding2themax.horse.horsedataservice.handlers.HorseHandler;
-import com.coding2themax.horse.horsedataservice.model.Horse;
 import com.coding2themax.horse.horsedataservice.service.HorseService;
 
 @Configuration(proxyBeanMethods = false)
-public class HorseRouter {
+public class HorseDataRouter {
 
   @RouterOperations({
       @RouterOperation(path = "/horses", method = RequestMethod.GET, beanClass = HorseService.class, beanMethod = "getAllHorses"),
@@ -31,6 +31,23 @@ public class HorseRouter {
         .GET("/horses/{id}", horseHandler::getHorseById)
         .GET("/horses/status/{status}", horseHandler::getHorsesByStatusID)
         .DELETE("horses/{id}", horseHandler::deleteHorse)
+        .build();
+  }
+
+  @RouterOperations({
+      @RouterOperation(path = "/horseGoods", method = RequestMethod.GET, beanClass = HorseGoodHandler.class, beanMethod = "getAllHorses"),
+      @RouterOperation(path = "/horseGoods", method = RequestMethod.POST, beanClass = HorseGoodHandler.class, beanMethod = "createHorseGood"),
+      @RouterOperation(path = "/horseGoods/{id}", method = RequestMethod.GET, beanClass = HorseGoodHandler.class, beanMethod = "getHorseGoodsById"),
+      @RouterOperation(path = "/horseGoods/{id}", method = RequestMethod.DELETE, beanClass = HorseGoodHandler.class, beanMethod = "deleteHorseGood"),
+      @RouterOperation(path = "/horseGoods", method = RequestMethod.PUT, beanClass = HorseGoodHandler.class, beanMethod = "updateHorseGood") })
+  @Bean
+  public RouterFunction<ServerResponse> horseGoodRoute(HorseGoodHandler horseGoodHandler) {
+    return RouterFunctions.route()
+        .GET("/horseGoods", horseGoodHandler::getAllHorses)
+        .POST("/horseGoods", horseGoodHandler::createHorseGood)
+        .GET("/horseGoods/{id}", horseGoodHandler::getHorseGoodsById)
+        .DELETE("/horseGoods/{id}", horseGoodHandler::deleteHorseGood)
+        .PUT("/horseGoods", horseGoodHandler::updateHorseGood)
         .build();
   }
 

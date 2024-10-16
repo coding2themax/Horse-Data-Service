@@ -1,6 +1,7 @@
 package com.coding2themax.horse.horsedataservice.config;
 
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -86,6 +87,42 @@ public class HorseRouterTest {
   }
 
   @Test
+  void testRouteHorseGood() {
+    webTestClient
+        // Create a GET request to test an endpoint
+        .get().uri("/horseGoods")
+        .accept(MediaType.APPLICATION_JSON)
+        .exchange()
+        // and use the dedicated DSL to test assertions against the response
+        .expectStatus().isOk()
+        .expectBodyList(Horse.class).value(h -> {
+          Assertions.assertFalse(h.isEmpty());
+        });
+  }
+
+  @Test
+  void testGetHorseGoodById() {
+    webTestClient
+        // Create a GET request to test an endpoint
+        .get().uri("/horseGoods/2")
+        .accept(MediaType.APPLICATION_JSON)
+        .exchange()
+        // and use the dedicated DSL to test assertions against the response
+        .expectStatus().isOk();
+  }
+
+  @Test
+  void testdeleteHorseGoodNotFound() {
+    webTestClient
+        // Create a DELETE request to test an endpoint
+        .delete().uri("/horseGoods/1")
+        .accept(MediaType.APPLICATION_JSON)
+        .exchange()
+        // and use the dedicated DSL to test assertions against the response
+        .expectStatus().isNotFound().expectBody(Void.class);
+  }
+
+  @Test
   void testDeleteHorse() {
     webTestClient
         // Create a DELETE request to test an endpoint
@@ -97,5 +134,37 @@ public class HorseRouterTest {
         .expectBody(Horse.class).value(h -> {
           Assertions.assertEquals(1, h.getId());
         });
+  }
+
+  @Test
+  void createHorseGoodTest() {
+    webTestClient
+        // Create a POST request to test an endpoint
+        .post().uri("/horseGoods")
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue("{\n" +
+            "  \"id\": 1,\n" +
+            "  \"name\": \"Saddle\",\n" +
+            "  \"description\": \"description\"\n" +
+            "}")
+        .exchange()
+        // and use the dedicated DSL to test assertions against the response
+        .expectStatus().isOk()
+        .expectBody(Horse.class).value(h -> {
+          Assertions.assertEquals(1, h.getId());
+        });
+  }
+
+  @Test
+  void updateHorseGoodTest() {
+    webTestClient.put().uri("/horseGoods")
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue("{\n" +
+            "  \"id\": 2,\n" +
+            "  \"name\": \"Saddle\",\n" +
+            "  \"description\": \"description\"\n" +
+            "}")
+        .exchange()
+        .expectStatus().isOk();
   }
 }

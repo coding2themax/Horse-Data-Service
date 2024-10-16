@@ -31,3 +31,7 @@ INSERT INTO stable.horse_status (horse_status_id, horse_status) VALUES (2, 'Inac
 INSERT INTO stable.horses (horse_id, horse_status_id, horse_name, breed, age, color, coat_pattern, training_level) VALUES (1, 1, 'Horse1', 'Thoroughbred', 5, 'Brown', 'Solid', 'Advanced');
 INSERT INTO stable.horses (horse_id, horse_status_id, horse_name, breed, age, color, coat_pattern, training_level) VALUES (2, 1, 'Horse2', 'Quarter Horse', 8, 'Chestnut', 'Spotted', 'Intermediate');
 INSERT INTO stable.horses (horse_id, horse_status_id, horse_name, breed, age, color, coat_pattern, training_level) VALUES (3, 2, 'Horse3', 'Arabian', 10, 'Gray', 'Pinto', 'Beginner');
+
+INSERT INTO stable.horse_goods (goods_id, goods_name, good_description) VALUES (1, 'Saddle', 'Leather');
+INSERT INTO stable.horse_goods (goods_id, goods_name, good_description) VALUES (2, 'Bridle', 'Leather');
+INSERT INTO stable.horse_goods (goods_id, goods_name, good_description) VALUES (3, 'Blanket', 'Wool');
