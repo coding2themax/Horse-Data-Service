@@ -25,6 +25,45 @@ CREATE TABLE stable.horse_goods (
 
 );
 
+
+-- Create the customers table
+CREATE TABLE IF NOT EXISTS stable.customers (
+  customer_id NUMERIC(3) NOT NULL PRIMARY KEY,
+  first_name VARCHAR(50) NOT NULL,
+  last_name VARCHAR(50) NOT NULL,
+  email VARCHAR(100) UNIQUE NOT NULL,
+  phone VARCHAR(15)
+);
+
+-- Create the products table
+CREATE TABLE IF NOT EXISTS stable.products (
+  product_id NUMERIC(3) PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  price DECIMAL(10, 2) NOT NULL,
+  stock INT NOT NULL
+);
+
+-- Create the orders table
+CREATE TABLE IF NOT EXISTS stable.orders (
+  order_id NUMERIC(3)  PRIMARY KEY,
+  customer_id INT NOT NULL,
+  order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  status VARCHAR(50) NOT NULL,
+  FOREIGN KEY (customer_id) REFERENCES stable.customers(customer_id)
+);
+
+-- Create the order_items table
+CREATE TABLE IF NOT EXISTS stable.order_items (
+  order_item_id NUMERIC(3)  PRIMARY KEY,
+  order_id INT NOT NULL,
+  product_id INT NOT NULL,
+  quantity INT NOT NULL,
+  price DECIMAL(10, 2) NOT NULL,
+  FOREIGN KEY (order_id) REFERENCES stable.orders(order_id),
+  FOREIGN KEY (product_id) REFERENCES stable.products(product_id)
+);
+
 INSERT INTO stable.horse_status (horse_status_id, horse_status) VALUES (1, 'Active');
 INSERT INTO stable.horse_status (horse_status_id, horse_status) VALUES (2, 'Inactive');
 
