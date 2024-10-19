@@ -2,6 +2,7 @@ package com.coding2themax.horse.horsedataservice.model;
 
 import org.springframework.data.relational.core.mapping.Table;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.domain.Persistable;
 import org.springframework.data.relational.core.mapping.Column;
 
@@ -16,6 +17,9 @@ public class HorseGoods implements Persistable<Integer> {
 
   @Column(value = "good_description")
   private String description;
+
+  @Transient
+  private boolean newHorseGoods;
 
   // Add getters and setters
   public Integer getId() {
@@ -44,7 +48,7 @@ public class HorseGoods implements Persistable<Integer> {
 
   @Override
   public boolean isNew() {
-    throw new UnsupportedOperationException("Unimplemented method 'isNew'");
+    return this.newHorseGoods || id == null;
   }
 
 }

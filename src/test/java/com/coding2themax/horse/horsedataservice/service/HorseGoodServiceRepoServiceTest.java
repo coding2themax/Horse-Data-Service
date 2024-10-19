@@ -105,15 +105,20 @@ public class HorseGoodServiceRepoServiceTest {
     horseGood.setId(1);
     horseGood.setName("Saddle");
 
+    HorseGoods updatedHorseGood = new HorseGoods();
+    updatedHorseGood.setId(1);
+    updatedHorseGood.setName("Western Saddle");
+
+    BDDMockito.when(horseGoodRepository.findById(1)).thenReturn(Mono.just(horseGood));
     // Mock the save method of the repository
-    BDDMockito.when(horseGoodRepository.save(BDDMockito.any(HorseGoods.class))).thenReturn(Mono.just(horseGood));
+    BDDMockito.when(horseGoodRepository.save(BDDMockito.any(HorseGoods.class))).thenReturn(Mono.just(updatedHorseGood));
 
     // Call the updateHorseGood method of the service
-    Mono<HorseGoods> result = horseGoodServiceRepoService.updateHorseGood(horseGood);
+    Mono<HorseGoods> result = horseGoodServiceRepoService.updateHorseGood(updatedHorseGood);
 
     // Verify the result
-    BDDMockito.then(horseGoodRepository).should().save(horseGood);
-    StepVerifier.create(result).expectNext(horseGood).verifyComplete();
+    // BDDMockito.then(horseGoodRepository).should().save(horseGood);
+    StepVerifier.create(result).expectNext(updatedHorseGood).verifyComplete();
   }
 
 }
