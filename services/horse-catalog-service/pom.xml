@@ -107,17 +107,14 @@
 						<configuration>
 							<rules>
 								<rule>
-									<!-- Your rule configuration goes here -->
-									<rule>
-										<element>PACKAGE</element>
-										<limits>
-											<limit>
-												<counter>INSTRUCTION</counter>
-												<value>COVEREDRATIO</value>
-												<minimum>0.90</minimum>
-											</limit>
-										</limits>
-									</rule>
+									<element>PACKAGE</element>
+									<limits>
+										<limit>
+											<counter>INSTRUCTION</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.90</minimum>
+										</limit>
+									</limits>
 								</rule>
 							</rules>
 						</configuration>

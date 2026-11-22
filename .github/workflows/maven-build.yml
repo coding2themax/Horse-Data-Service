@@ -30,8 +30,5 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      - name: Install dependencies
-        run: mvn install -DskipTests
-
-      - name: Run tests
-        run: mvn test
+      - name: Build, test, and enforce coverage
+        run: ./mvnw -B -ntp verify
