@@ -1,5 +1,6 @@
 package com.coding2themax.horse.stock.application;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import com.coding2themax.horse.saga.contracts.MessageEnvelope;
 import com.coding2themax.horse.saga.contracts.OrderLine;
+import com.coding2themax.horse.saga.contracts.PricedLine;
 import com.coding2themax.horse.saga.contracts.SagaMessage;
 import com.coding2themax.horse.saga.contracts.SagaMessage.ReleaseStock;
 import com.coding2themax.horse.saga.contracts.SagaMessage.ReserveStock;
@@ -34,7 +36,7 @@ public class StockReservationService {
 
   private static final String FIND_STATUS = "SELECT status FROM stock_reservations WHERE saga_id = :sagaId FOR UPDATE";
   private static final String LOCK_PRODUCTS = """
-      SELECT product_id, stock FROM products
+      SELECT product_id, stock, price FROM products
       WHERE product_id = ANY(:ids)
       ORDER BY product_id
       FOR UPDATE
@@ -43,8 +45,13 @@ public class StockReservationService {
       INSERT INTO stock_reservations (saga_id, order_id, status) VALUES (:sagaId, :orderId, :status)
       """;
   private static final String INSERT_LINE = """
-      INSERT INTO stock_reservation_lines (saga_id, product_id, quantity)
-      VALUES (:sagaId, :productId, :quantity)
+      INSERT INTO stock_reservation_lines (saga_id, product_id, quantity, unit_price)
+      VALUES (:sagaId, :productId, :quantity, :unitPrice)
+      """;
+  private static final String FIND_LINES = """
+      SELECT product_id, quantity, unit_price FROM stock_reservation_lines
+      WHERE saga_id = :sagaId
+      ORDER BY product_id
       """;
   private static final String TAKE_STOCK = """
       UPDATE products SET stock = stock - :quantity
@@ -84,9 +91,9 @@ public class StockReservationService {
 
   private Mono<Void> reserve(UUID sagaId, ReserveStock command) {
     return findStatus(sagaId).flatMap(existing -> existing
-        .map(status -> reply(sagaId, status == ReservationStatus.RESERVED
-            ? new StockReserved(command.orderId())
-            : new StockRejected(command.orderId(), "Reservation is already " + status)))
+        .map(status -> status == ReservationStatus.RESERVED
+            ? findLines(sagaId).flatMap(lines -> reply(sagaId, new StockReserved(command.orderId(), lines)))
+            : reply(sagaId, new StockRejected(command.orderId(), "Reservation is already " + status)))
         .orElseGet(() -> reserveNew(sagaId, command)));
   }
 
@@ -94,16 +101,22 @@ public class StockReservationService {
     Map<Integer, Integer> wanted = mergeLines(command.lines());
     return database.sql(LOCK_PRODUCTS)
         .bind("ids", wanted.keySet().toArray(Integer[]::new))
-        .map(row -> Map.entry(row.get("product_id", Integer.class), row.get("stock", Integer.class)))
+        .map(row -> Map.entry(row.get("product_id", Integer.class),
+            new AvailableProduct(row.get("stock", Integer.class), row.get("price", BigDecimal.class))))
         .all()
         .collectMap(Map.Entry::getKey, Map.Entry::getValue)
         .flatMap(available -> findShortage(wanted, available)
             .map(reason -> insertReservation(sagaId, command.orderId(), ReservationStatus.REJECTED)
                 .then(reply(sagaId, new StockRejected(command.orderId(), reason))))
-            .orElseGet(() -> insertReservation(sagaId, command.orderId(), ReservationStatus.RESERVED)
-                .thenMany(Flux.fromIterable(wanted.entrySet()))
-                .concatMap(line -> takeStock(sagaId, line.getKey(), line.getValue()))
-                .then(reply(sagaId, new StockReserved(command.orderId())))));
+            .orElseGet(() -> {
+              List<PricedLine> lines = wanted.entrySet().stream()
+                  .map(line -> new PricedLine(line.getKey(), line.getValue(), available.get(line.getKey()).price()))
+                  .toList();
+              return insertReservation(sagaId, command.orderId(), ReservationStatus.RESERVED)
+                  .thenMany(Flux.fromIterable(lines))
+                  .concatMap(line -> takeStock(sagaId, line))
+                  .then(reply(sagaId, new StockReserved(command.orderId(), lines)));
+            }));
   }
 
   private Mono<Void> release(UUID sagaId, ReleaseStock command) {
@@ -123,21 +136,31 @@ public class StockReservationService {
         .then();
   }
 
-  private Mono<Void> takeStock(UUID sagaId, int productId, int quantity) {
+  private Mono<Void> takeStock(UUID sagaId, PricedLine line) {
     return database.sql(TAKE_STOCK)
-        .bind("quantity", quantity)
-        .bind("productId", productId)
+        .bind("quantity", line.quantity())
+        .bind("productId", line.productId())
         .fetch()
         .rowsUpdated()
         .flatMap(updated -> updated == 1
             ? database.sql(INSERT_LINE)
                 .bind("sagaId", sagaId)
-                .bind("productId", productId)
-                .bind("quantity", quantity)
+                .bind("productId", line.productId())
+                .bind("quantity", line.quantity())
+                .bind("unitPrice", line.unitPrice())
                 .fetch()
                 .rowsUpdated()
                 .then()
-            : Mono.error(new IllegalStateException("Locked product " + productId + " lost stock")));
+            : Mono.error(new IllegalStateException("Locked product " + line.productId() + " lost stock")));
+  }
+
+  private Mono<List<PricedLine>> findLines(UUID sagaId) {
+    return database.sql(FIND_LINES)
+        .bind("sagaId", sagaId)
+        .map(row -> new PricedLine(row.get("product_id", Integer.class), row.get("quantity", Integer.class),
+            row.get("unit_price", BigDecimal.class)))
+        .all()
+        .collectList();
   }
 
   private Mono<Optional<ReservationStatus>> findStatus(UUID sagaId) {
@@ -169,12 +192,16 @@ public class StockReservationService {
     return merged;
   }
 
-  private static Optional<String> findShortage(Map<Integer, Integer> wanted, Map<Integer, Integer> available) {
+  private static Optional<String> findShortage(Map<Integer, Integer> wanted, Map<Integer, AvailableProduct> available) {
     return wanted.entrySet().stream()
-        .filter(line -> available.getOrDefault(line.getKey(), 0) < line.getValue())
+        .filter(line -> !available.containsKey(line.getKey())
+            || available.get(line.getKey()).stock() < line.getValue())
         .findFirst()
         .map(line -> available.containsKey(line.getKey())
             ? "Insufficient stock for product " + line.getKey()
             : "Unknown product " + line.getKey());
+  }
+
+  private record AvailableProduct(int stock, BigDecimal price) {
   }
 }

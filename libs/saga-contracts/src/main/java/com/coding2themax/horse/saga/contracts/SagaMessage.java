@@ -23,7 +23,10 @@ public sealed interface SagaMessage {
     }
   }
 
-  record StockReserved(UUID orderId) implements SagaMessage {
+  record StockReserved(UUID orderId, List<PricedLine> lines) implements SagaMessage {
+    public StockReserved {
+      lines = PricedLine.requireLines(lines);
+    }
   }
 
   record StockRejected(UUID orderId, String reason) implements SagaMessage {
@@ -35,7 +38,10 @@ public sealed interface SagaMessage {
   record StockReleased(UUID orderId) implements SagaMessage {
   }
 
-  record ApproveOrder(UUID orderId) implements SagaMessage {
+  record ApproveOrder(UUID orderId, List<PricedLine> lines) implements SagaMessage {
+    public ApproveOrder {
+      lines = PricedLine.requireLines(lines);
+    }
   }
 
   record OrderApproved(UUID orderId) implements SagaMessage {

@@ -18,5 +18,6 @@ CREATE TABLE stock_reservation_lines (
   saga_id UUID NOT NULL REFERENCES stock_reservations (saga_id),
   product_id INTEGER NOT NULL REFERENCES products (product_id),
   quantity INTEGER NOT NULL CHECK (quantity > 0),
+  unit_price DECIMAL(10, 2) NOT NULL CHECK (unit_price >= 0),
   PRIMARY KEY (saga_id, product_id)
 );

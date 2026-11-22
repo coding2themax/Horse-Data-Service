@@ -3,6 +3,7 @@ package com.coding2themax.horse.saga.contracts;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 class SagaContractsTest {
 
   private static final UUID ORDER = UUID.randomUUID();
+  private static final List<PricedLine> PRICED = List.of(new PricedLine(1, 2, BigDecimal.TEN));
 
   @Test
   void orderLineRejectsInvalidValues() {
@@ -21,6 +23,26 @@ class SagaContractsTest {
     OrderLine line = new OrderLine(1, 2);
     assertEquals(1, line.productId());
     assertEquals(2, line.quantity());
+  }
+
+  @Test
+  void pricedLineRejectsInvalidValues() {
+    assertThrows(IllegalArgumentException.class, () -> new PricedLine(0, 1, BigDecimal.ONE));
+    assertThrows(IllegalArgumentException.class, () -> new PricedLine(1, 0, BigDecimal.ONE));
+    assertThrows(IllegalArgumentException.class, () -> new PricedLine(1, 1, null));
+    assertThrows(IllegalArgumentException.class, () -> new PricedLine(1, 1, new BigDecimal("-0.01")));
+    PricedLine line = new PricedLine(3, 4, BigDecimal.ONE);
+    assertEquals(3, line.productId());
+    assertEquals(4, line.quantity());
+    assertEquals(BigDecimal.ONE, line.unitPrice());
+  }
+
+  @Test
+  void pricedMessagesRequireLines() {
+    assertThrows(IllegalArgumentException.class, () -> new SagaMessage.StockReserved(ORDER, List.of()));
+    assertThrows(IllegalArgumentException.class, () -> new SagaMessage.ApproveOrder(ORDER, null));
+    assertEquals(PRICED, new SagaMessage.StockReserved(ORDER, PRICED).lines());
+    assertEquals(PRICED, new SagaMessage.ApproveOrder(ORDER, PRICED).lines());
   }
 
   @Test
@@ -37,9 +59,9 @@ class SagaContractsTest {
   @Test
   void everyMessageExposesItsOrderId() {
     List<SagaMessage> messages = List.of(
-        new SagaMessage.StockReserved(ORDER), new SagaMessage.StockRejected(ORDER, "none"),
+        new SagaMessage.StockReserved(ORDER, PRICED), new SagaMessage.StockRejected(ORDER, "none"),
         new SagaMessage.ReleaseStock(ORDER), new SagaMessage.StockReleased(ORDER),
-        new SagaMessage.ApproveOrder(ORDER), new SagaMessage.OrderApproved(ORDER),
+        new SagaMessage.ApproveOrder(ORDER, PRICED), new SagaMessage.OrderApproved(ORDER),
         new SagaMessage.OrderApprovalFailed(ORDER, "bad"), new SagaMessage.CancelOrder(ORDER, "bad"),
         new SagaMessage.OrderCancelled(ORDER));
     messages.forEach(message -> assertEquals(ORDER, message.orderId()));

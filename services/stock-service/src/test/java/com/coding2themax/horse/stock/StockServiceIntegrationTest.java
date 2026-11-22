@@ -104,7 +104,11 @@ class StockServiceIntegrationTest {
     process(saga, reserve(line(product, 2)));
 
     assertEquals(3, stock(product));
-    assertInstanceOf(StockReserved.class, lastReply(saga));
+    StockReserved reply = assertInstanceOf(StockReserved.class, lastReply(saga));
+    assertEquals(1, reply.lines().size());
+    assertEquals(product, reply.lines().get(0).productId());
+    assertEquals(2, reply.lines().get(0).quantity());
+    assertEquals(0, BigDecimal.TEN.compareTo(reply.lines().get(0).unitPrice()));
   }
 
   @Test
@@ -166,7 +170,8 @@ class StockServiceIntegrationTest {
 
     assertEquals(3, stock(product));
     assertEquals(2, replies(saga).size());
-    assertInstanceOf(StockReserved.class, lastReply(saga));
+    StockReserved reply = assertInstanceOf(StockReserved.class, lastReply(saga));
+    assertEquals(2, reply.lines().get(0).quantity());
   }
 
   @Test
@@ -247,7 +252,7 @@ class StockServiceIntegrationTest {
 
   @Test
   void unsupportedCommandFails() {
-    SagaMessage message = new StockReserved(UUID.randomUUID());
+    SagaMessage message = new StockReleased(UUID.randomUUID());
     MessageEnvelope envelope = codec.encode(UUID.randomUUID(), message);
 
     assertThrows(IllegalArgumentException.class, () -> reservations.handle(envelope, message).block(TIMEOUT));

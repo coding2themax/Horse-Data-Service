@@ -24,6 +24,7 @@
 		<module>libs/saga-messaging</module>
 		<module>services/horse-catalog-service</module>
 		<module>services/stock-service</module>
+		<module>services/order-service</module>
 	</modules>
 	<dependencyManagement>
 		<dependencies>

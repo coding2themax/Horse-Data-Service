@@ -275,7 +275,7 @@ class SagaMessagingIntegrationTest {
   }
 
   private MessageEnvelope append(String topic, UUID saga) {
-    return transaction.transactional(outbox.append(topic, saga, new SagaMessage.StockReserved(UUID.randomUUID())))
+    return transaction.transactional(outbox.append(topic, saga, new SagaMessage.OrderApproved(UUID.randomUUID())))
         .block(TIMEOUT);
   }
 
