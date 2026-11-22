@@ -1,0 +1,7 @@
+.git
+.github
+.vscode
+.env
+.DS_Store
+data
+**/target
