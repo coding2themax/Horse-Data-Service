@@ -1,15 +1,13 @@
-# Use a base image with Java 11 installed
-FROM eclipse-temurin:21-jdk-alpine
+# Build one application from the Maven reactor, selected with --build-arg MODULE=<name>
+FROM eclipse-temurin:21-jdk-alpine AS build
+ARG MODULE=horse-catalog-service
+WORKDIR /workspace
+COPY . .
+RUN ./mvnw -B -ntp -pl services/${MODULE} -am package -DskipTests \
+  && cp services/${MODULE}/target/${MODULE}-*.jar /app.jar
 
-
-# Set the working directory inside the container
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-
-# Copy the JAR file into the container
-COPY target/horse-data-service-0.0.1-SNAPSHOT.jar /app/horse-data-service.jar
-
-# Expose the port that the application will run on
+COPY --from=build /app.jar /app/app.jar
 EXPOSE 13000
-
-# Set the command to run the application when the container starts
-ENTRYPOINT  ["java", "-jar", "horse-data-service.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
