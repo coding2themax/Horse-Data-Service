@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
@@ -190,6 +191,8 @@ class StoreOrderSagaIT {
     stock.stop();
     JsonNode placed = placeOrder(product, 1);
     awaitSaga(placed, "RESERVING_STOCK");
+    // The saga state commits before the relay publishes its command.
+    awaitCommandPublished(placed);
 
     orchestrator.stop();
     stock.start();
@@ -245,6 +248,24 @@ class StoreOrderSagaIT {
       Thread.sleep(100);
     }
     throw new AssertionError("Stock for product " + product + " never reached " + expected);
+  }
+
+  private static void awaitCommandPublished(JsonNode placed) throws Exception {
+    String sql = "SELECT count(*) FROM outbox WHERE saga_id = ? AND published_at IS NOT NULL";
+    long deadline = System.nanoTime() + WAIT.toNanos();
+    try (Connection connection = connect("horse_saga"); PreparedStatement statement = connection.prepareStatement(sql)) {
+      statement.setObject(1, UUID.fromString(text(placed, "sagaId")));
+      while (System.nanoTime() < deadline) {
+        try (ResultSet result = statement.executeQuery()) {
+          result.next();
+          if (result.getInt(1) > 0) {
+            return;
+          }
+        }
+        Thread.sleep(50);
+      }
+    }
+    throw new AssertionError("Saga command was never published");
   }
 
   private static JsonNode awaitSaga(JsonNode placed, String state) throws Exception {
