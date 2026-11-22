@@ -23,6 +23,7 @@
 		<module>libs/saga-contracts</module>
 		<module>libs/saga-messaging</module>
 		<module>services/horse-catalog-service</module>
+		<module>services/stock-service</module>
 	</modules>
 	<dependencyManagement>
 		<dependencies>
