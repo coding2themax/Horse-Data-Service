@@ -37,6 +37,10 @@ class CatalogMigrationUpgradeTest {
           INSERT INTO stable.horses (horse_id, horse_status_id, horse_name)
           VALUES (99, 1, 'Existing Horse')
           """);
+      statement.execute("""
+          INSERT INTO stable.horse_goods (goods_id, goods_name, good_description)
+          VALUES (50, 'Existing Good', 'Kept')
+          """);
     }
     CatalogDatabaseTestProperties.register(registry, POSTGRES);
   }
@@ -48,8 +52,13 @@ class CatalogMigrationUpgradeTest {
       assertEquals(1, count(statement, "SELECT count(*) FROM stable.horses WHERE horse_id = 99"));
       assertEquals(1, count(statement,
           "SELECT count(*) FROM stable.flyway_schema_history WHERE version = '1' AND type = 'BASELINE' AND success"));
-      assertEquals(0, count(statement,
+      assertEquals(1, count(statement,
           "SELECT count(*) FROM stable.flyway_schema_history WHERE type = 'SQL'"));
+      assertEquals(1, count(statement,
+          "SELECT count(*) FROM stable.flyway_schema_history WHERE version = '2' AND type = 'SQL' AND success"));
+      assertEquals(1, count(statement, "SELECT count(*) FROM stable.horse_goods WHERE goods_id = 50"));
+      assertEquals(51, count(statement,
+          "INSERT INTO stable.horse_goods (goods_name) VALUES ('Next Good') RETURNING goods_id"));
     }
   }
 

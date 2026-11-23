@@ -162,9 +162,9 @@ public class HorseRouterTest {
         .exchange()
         // and use the dedicated DSL to test assertions against the response
         .expectStatus().isOk()
-        .expectBody(Horse.class).value(h -> {
-          Assertions.assertEquals(1, h.getId());
-        });
+        .expectBody()
+        .jsonPath("$.id").isNumber()
+        .jsonPath("$.name").isEqualTo("Saddle");
   }
 
   @Test

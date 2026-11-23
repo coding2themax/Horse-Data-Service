@@ -19,7 +19,11 @@ public class HorseGoodServiceRepoService implements HorseGoodService {
 
   @Override
   public Mono<HorseGoods> addHorseGood(HorseGoods horseGood) {
-    return horseGoodRepository.save(horseGood);
+    // The database assigns the id, so a client id can never overwrite a good.
+    HorseGoods newGood = new HorseGoods();
+    newGood.setName(horseGood.getName());
+    newGood.setDescription(horseGood.getDescription());
+    return horseGoodRepository.save(newGood);
   }
 
   @Override
