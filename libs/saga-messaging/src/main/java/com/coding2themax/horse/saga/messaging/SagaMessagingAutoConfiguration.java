@@ -1,10 +1,14 @@
 package com.coding2themax.horse.saga.messaging;
 
+import java.util.Map;
+
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.kafka.DefaultKafkaProducerFactoryCustomizer;
 import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
 import org.springframework.boot.autoconfigure.r2dbc.R2dbcAutoConfiguration;
 import org.springframework.boot.autoconfigure.r2dbc.R2dbcTransactionManagerAutoConfiguration;
@@ -48,6 +52,17 @@ public class SagaMessagingAutoConfiguration {
           "Set horse.saga.messaging.consumer-name or spring.application.name for the saga inbox");
     }
     return new InboxProcessor(DatabaseClient.create(connectionFactory), transactionManager, consumer);
+  }
+
+  /** Makes a stalled send fail before the relay's timeout, unless the service set its own limit. */
+  @Bean
+  DefaultKafkaProducerFactoryCustomizer sagaProducerBlockLimit(SagaMessagingProperties properties) {
+    return factory -> {
+      if (!factory.getConfigurationProperties().containsKey(ProducerConfig.MAX_BLOCK_MS_CONFIG)) {
+        long limit = Math.max(1, properties.relay().sendTimeout().toMillis() / 2);
+        factory.updateConfigs(Map.of(ProducerConfig.MAX_BLOCK_MS_CONFIG, limit));
+      }
+    };
   }
 
   @Bean
