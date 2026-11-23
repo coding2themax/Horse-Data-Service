@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -121,6 +122,12 @@ class SagaMessagingIntegrationTest {
         .then(Mono.error(new IllegalStateException("business failure")));
     assertThrows(IllegalStateException.class, () -> transaction.transactional(failed).block(TIMEOUT));
     assertEquals(0, count("SELECT count(*) FROM outbox"));
+  }
+
+  @Test
+  void producerBlockLimitIsBelowRelaySendTimeout() {
+    assertEquals(5000L, kafka.getProducerFactory().getConfigurationProperties()
+        .get(ProducerConfig.MAX_BLOCK_MS_CONFIG));
   }
 
   @Test
