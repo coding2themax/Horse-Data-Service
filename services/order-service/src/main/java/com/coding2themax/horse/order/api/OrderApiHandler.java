@@ -23,6 +23,9 @@ import reactor.core.publisher.Mono;
 @Component
 public class OrderApiHandler {
 
+  private static final String IDEMPOTENCY_KEY_HEADER = "X-Idempotency-Key";
+  private static final String IDEMPOTENCY_REPLAYED_HEADER = "X-Idempotency-Replayed";
+
   private final CustomerService customers;
   private final OrderService orders;
   private final Validator validator;
@@ -50,12 +53,13 @@ public class OrderApiHandler {
   }
 
   public Mono<ServerResponse> placeOrder(ServerRequest request) {
-    return body(request, CreateOrderRequest.class)
-        .flatMap(orders::place)
-        .flatMap(order -> ServerResponse.accepted()
-            .location(URI.create("/orders/" + order.id()))
+    return Mono.fromCallable(() -> idempotencyKey(request))
+        .flatMap(key -> body(request, CreateOrderRequest.class).flatMap(order -> orders.place(key, order)))
+        .flatMap(placed -> ServerResponse.accepted()
+            .location(URI.create("/orders/" + placed.order().id()))
+            .header(IDEMPOTENCY_REPLAYED_HEADER, String.valueOf(placed.replayed()))
             .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(order));
+            .bodyValue(placed.order()));
   }
 
   public Mono<ServerResponse> getOrder(ServerRequest request) {
@@ -85,6 +89,22 @@ public class OrderApiHandler {
     } catch (NumberFormatException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer id must be a number");
     }
+  }
+
+  private static UUID idempotencyKey(ServerRequest request) {
+    String value = request.headers().firstHeader(IDEMPOTENCY_KEY_HEADER);
+    if (value != null) {
+      try {
+        UUID key = UUID.fromString(value);
+        // UUID.fromString also accepts shortened forms such as 1-1-1-1-1.
+        if (key.toString().equalsIgnoreCase(value)) {
+          return key;
+        }
+      } catch (IllegalArgumentException e) {
+        // Reported below.
+      }
+    }
+    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, IDEMPOTENCY_KEY_HEADER + " must be a UUID");
   }
 
   private static UUID orderId(ServerRequest request) {
