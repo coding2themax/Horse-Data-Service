@@ -18,6 +18,7 @@
 	<properties>
 		<java.version>21</java.version>
 		<testcontainers.version>1.21.4</testcontainers.version>
+		<archunit.version>1.5.1</archunit.version>
 	</properties>
 	<modules>
 		<module>services/horse-catalog-service</module>

@@ -6,6 +6,16 @@ spring:
     url: ${DATABASE_HOST}
     username: ${DATABASE_USERNAME}
     password: ${DATABASE_PASSWORD}
+  flyway:
+    # Flyway needs JDBC; application queries continue to use R2DBC.
+    url: ${DATABASE_JDBC_URL}
+    user: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    schemas: stable
+    default-schema: stable
+    # Databases created by the old init.sql already contain V1.
+    baseline-on-migrate: true
+    baseline-version: 1
 management:
   endpoints:
     web:
