@@ -1,7 +1,9 @@
 package com.coding2themax.horse.horsedataservice.service;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.BDDMockito;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -39,11 +41,13 @@ public class HorseGoodServiceRepoServiceTest {
     Mono<HorseGoods> result = horseGoodServiceRepoService.addHorseGood(horseGood);
 
     // Verify the result
-    BDDMockito.then(horseGoodRepository).should().save(horseGood);
-    StepVerifier.create(result)
-        .expectNextMatches(
-            h -> h.getId() != null && h.getName().equals("Saddle") && h.getDescription().equals("description"))
-        .verifyComplete();
+    ArgumentCaptor<HorseGoods> saved = ArgumentCaptor.forClass(HorseGoods.class);
+    BDDMockito.then(horseGoodRepository).should().save(saved.capture());
+    Assertions.assertNull(saved.getValue().getId());
+    Assertions.assertTrue(saved.getValue().isNew());
+    Assertions.assertEquals("Saddle", saved.getValue().getName());
+    Assertions.assertEquals("description", saved.getValue().getDescription());
+    StepVerifier.create(result).expectNext(horseGood).verifyComplete();
 
   }
 
