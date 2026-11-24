@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -32,8 +33,12 @@ import reactor.core.publisher.Mono;
 public class OrderService {
 
   private static final String INSERT_ORDER = """
-      INSERT INTO orders (order_id, saga_id, customer_id, status)
-      VALUES (:orderId, :sagaId, :customerId, 'PLACED')
+      INSERT INTO orders (order_id, saga_id, customer_id, status, idempotency_key, request_fingerprint)
+      VALUES (:orderId, :sagaId, :customerId, 'PLACED', :key, :fingerprint)
+      ON CONFLICT (idempotency_key) DO NOTHING
+      """;
+  private static final String FIND_BY_KEY = """
+      SELECT order_id, request_fingerprint FROM orders WHERE idempotency_key = :key
       """;
   private static final String INSERT_ITEM = """
       INSERT INTO order_items (order_id, product_id, quantity) VALUES (:orderId, :productId, :quantity)
@@ -59,17 +64,21 @@ public class OrderService {
     this.transaction = TransactionalOperator.create(transactionManager);
   }
 
-  /** Stores the order and the event that starts its saga in one transaction. */
-  public Mono<OrderResponse> place(CreateOrderRequest request) {
+  /**
+   * Stores the order and the event that starts its saga in one transaction. The
+   * unique key makes concurrent retries wait, then return the committed order.
+   */
+  public Mono<PlacedOrder> place(UUID idempotencyKey, CreateOrderRequest request) {
     UUID orderId = UUID.randomUUID();
     UUID sagaId = UUID.randomUUID();
     return Mono.fromCallable(() -> mergeLines(request.lines()))
         .flatMap(lines -> transaction.transactional(customers.existsById(request.customerId())
             .flatMap(exists -> exists
-                ? insertOrder(orderId, sagaId, request.customerId(), lines)
+                ? insertOrReplay(idempotencyKey, orderId, sagaId, request.customerId(), lines)
                 : Mono.error(new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
                     "Customer " + request.customerId() + " not found")))))
-        .then(Mono.defer(() -> findById(orderId)));
+        .flatMap(storedId -> findById(storedId)
+            .map(order -> new PlacedOrder(order, !storedId.equals(orderId))));
   }
 
   public Mono<OrderResponse> findById(UUID orderId) {
@@ -92,14 +101,34 @@ public class OrderService {
             order.status(), order.statusReason(), order.orderDate(), order.totalPrice(), lines));
   }
 
-  private Mono<Void> insertOrder(UUID orderId, UUID sagaId, int customerId, List<OrderLine> lines) {
+  private Mono<UUID> insertOrReplay(UUID key, UUID orderId, UUID sagaId, int customerId, List<OrderLine> lines) {
+    String fingerprint = fingerprint(customerId, lines);
     return database.sql(INSERT_ORDER)
         .bind("orderId", orderId)
         .bind("sagaId", sagaId)
         .bind("customerId", customerId)
+        .bind("key", key)
+        .bind("fingerprint", fingerprint)
         .fetch()
         .rowsUpdated()
-        .thenMany(Flux.fromIterable(lines))
+        .flatMap(inserted -> inserted == 1
+            ? insertLinesAndEvent(orderId, sagaId, lines).thenReturn(orderId)
+            : findReplay(key, fingerprint));
+  }
+
+  private Mono<UUID> findReplay(UUID key, String fingerprint) {
+    return database.sql(FIND_BY_KEY)
+        .bind("key", key)
+        .map(row -> Map.entry(row.get("order_id", UUID.class), row.get("request_fingerprint", String.class)))
+        .one()
+        .flatMap(stored -> stored.getValue().equals(fingerprint)
+            ? Mono.just(stored.getKey())
+            : Mono.error(new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                "Idempotency key was used with a different request")));
+  }
+
+  private Mono<Void> insertLinesAndEvent(UUID orderId, UUID sagaId, List<OrderLine> lines) {
+    return Flux.fromIterable(lines)
         .concatMap(line -> database.sql(INSERT_ITEM)
             .bind("orderId", orderId)
             .bind("productId", line.productId())
@@ -108,6 +137,13 @@ public class OrderService {
             .rowsUpdated())
         .then(outbox.append(SagaTopics.ORDER_EVENTS, sagaId, new OrderPlaced(orderId, lines)))
         .then();
+  }
+
+  /** Lines are already merged and sorted, so equivalent requests match. */
+  private static String fingerprint(int customerId, List<OrderLine> lines) {
+    return customerId + ":" + lines.stream()
+        .map(line -> line.productId() + "x" + line.quantity())
+        .collect(Collectors.joining(","));
   }
 
   private static List<OrderLine> mergeLines(List<OrderLineRequest> lines) {

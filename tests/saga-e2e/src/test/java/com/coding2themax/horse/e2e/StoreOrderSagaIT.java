@@ -346,6 +346,7 @@ class StoreOrderSagaIT {
   private static JsonNode post(ServiceProcess service, String path, Object body, int expected) throws Exception {
     HttpResponse<String> response = send(service, HttpRequest.newBuilder(service.uri(path))
         .header("Content-Type", "application/json")
+        .header("X-Idempotency-Key", UUID.randomUUID().toString())
         .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body))));
     assertEquals(expected, response.statusCode(), response.body());
     return JSON.readTree(response.body());

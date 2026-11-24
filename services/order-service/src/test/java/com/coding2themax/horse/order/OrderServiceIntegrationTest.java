@@ -8,9 +8,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -58,6 +66,8 @@ import com.coding2themax.horse.saga.messaging.SagaMessageHandler;
 class OrderServiceIntegrationTest {
 
   private static final Duration TIMEOUT = Duration.ofSeconds(30);
+  private static final String IDEMPOTENCY_KEY = "X-Idempotency-Key";
+  private static final String IDEMPOTENCY_REPLAYED = "X-Idempotency-Replayed";
 
   @Container
   static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:14");
@@ -122,6 +132,7 @@ class OrderServiceIntegrationTest {
     int customer = customer("buyer@example.com");
 
     OrderResponse order = web.post().uri("/orders").contentType(MediaType.APPLICATION_JSON)
+        .header(IDEMPOTENCY_KEY, UUID.randomUUID().toString())
         .bodyValue(Map.of("customerId", customer, "lines", List.of(
             Map.of("productId", 7, "quantity", 1), Map.of("productId", 3, "quantity", 2),
             Map.of("productId", 7, "quantity", 4))))
@@ -139,6 +150,97 @@ class OrderServiceIntegrationTest {
     assertEquals(2, event.lines().size());
     web.get().uri("/orders/{id}", order.id()).exchange().expectStatus().isOk()
         .expectBody().jsonPath("$.status").isEqualTo("PLACED");
+  }
+
+  @Test
+  void orderRequiresValidIdempotencyKey() {
+    int customer = customer("key@example.com");
+    Map<String, Object> body = orderBody(customer, 1, 1);
+
+    web.post().uri("/orders").contentType(MediaType.APPLICATION_JSON).bodyValue(body).exchange()
+        .expectStatus().isBadRequest();
+    postOrder("not-a-uuid", body).expectStatus().isBadRequest();
+    postOrder("1-1-1-1-1", body).expectStatus().isBadRequest();
+
+    assertEquals(0, rows("orders"));
+    assertEquals(0, rows("outbox"));
+  }
+
+  @Test
+  void retryReturnsOriginalOrderWithoutStartingAnotherSaga() {
+    int customer = customer("retry@example.com");
+    String key = UUID.randomUUID().toString();
+    Map<String, Object> body = orderBody(customer, 1, 2);
+
+    OrderResponse first = accepted(postOrder(key, body), "false");
+    OrderResponse retry = accepted(postOrder(key, body), "true");
+
+    assertEquals(first.id(), retry.id());
+    assertEquals(first.sagaId(), retry.sagaId());
+    assertEquals(1, rows("orders"));
+    assertEquals(1, rows("order_items"));
+    assertEquals(1, rows("outbox"));
+  }
+
+  @Test
+  void retryWithEquivalentLinesInAnotherOrderIsReplay() {
+    int customer = customer("equivalent@example.com");
+    String key = UUID.randomUUID().toString();
+
+    OrderResponse first = accepted(postOrder(key, Map.of("customerId", customer, "lines", List.of(
+        Map.of("productId", 1, "quantity", 1), Map.of("productId", 2, "quantity", 3)))), "false");
+    OrderResponse retry = accepted(postOrder(key, Map.of("customerId", customer, "lines", List.of(
+        Map.of("productId", 2, "quantity", 3), Map.of("productId", 1, "quantity", 1)))), "true");
+
+    assertEquals(first.id(), retry.id());
+  }
+
+  @Test
+  void reusedKeyWithDifferentRequestIsRejected() {
+    int customer = customer("reuse@example.com");
+    int other = customer("other@example.com");
+    String key = UUID.randomUUID().toString();
+    accepted(postOrder(key, orderBody(customer, 1, 1)), "false");
+
+    postOrder(key, orderBody(customer, 1, 2)).expectStatus().isEqualTo(422);
+    postOrder(key, orderBody(customer, 2, 1)).expectStatus().isEqualTo(422);
+    postOrder(key, orderBody(other, 1, 1)).expectStatus().isEqualTo(422);
+
+    assertEquals(1, rows("orders"));
+    assertEquals(1, rows("outbox"));
+  }
+
+  @Test
+  void failedRequestDoesNotConsumeKey() {
+    String key = UUID.randomUUID().toString();
+    postOrder(key, orderBody(999, 1, 1)).expectStatus().isEqualTo(422);
+    int customer = customer("after-failure@example.com");
+
+    accepted(postOrder(key, orderBody(customer, 1, 1)), "false");
+
+    assertEquals(1, rows("orders"));
+  }
+
+  @Test
+  void concurrentRetriesCreateOneOrder() throws Exception {
+    int customer = customer("concurrent@example.com");
+    String key = UUID.randomUUID().toString();
+    Map<String, Object> body = orderBody(customer, 1, 1);
+    List<Callable<OrderResponse>> requests = Collections.nCopies(12, () -> postOrder(key, body)
+        .expectStatus().isAccepted()
+        .expectBody(OrderResponse.class).returnResult().getResponseBody());
+
+    Set<UUID> ids = new HashSet<>();
+    try (ExecutorService pool = Executors.newFixedThreadPool(12)) {
+      for (Future<OrderResponse> response : pool.invokeAll(requests)) {
+        ids.add(response.get(TIMEOUT.toSeconds(), TimeUnit.SECONDS).id());
+      }
+    }
+
+    assertEquals(1, ids.size());
+    assertEquals(1, rows("orders"));
+    assertEquals(1, rows("order_items"));
+    assertEquals(1, rows("outbox"));
   }
 
   @Test
@@ -297,7 +399,27 @@ class OrderServiceIntegrationTest {
   }
 
   private WebTestClient.ResponseSpec postOrder(Map<String, Object> body) {
-    return web.post().uri("/orders").contentType(MediaType.APPLICATION_JSON).bodyValue(body).exchange();
+    return postOrder(UUID.randomUUID().toString(), body);
+  }
+
+  private WebTestClient.ResponseSpec postOrder(String key, Object body) {
+    return web.post().uri("/orders").contentType(MediaType.APPLICATION_JSON)
+        .header(IDEMPOTENCY_KEY, key).bodyValue(body).exchange();
+  }
+
+  private static Map<String, Object> orderBody(int customer, int product, int quantity) {
+    return Map.of("customerId", customer, "lines", List.of(Map.of("productId", product, "quantity", quantity)));
+  }
+
+  private OrderResponse accepted(WebTestClient.ResponseSpec response, String replayed) {
+    return response.expectStatus().isAccepted()
+        .expectHeader().valueEquals(IDEMPOTENCY_REPLAYED, replayed)
+        .expectBody(OrderResponse.class).returnResult().getResponseBody();
+  }
+
+  private long rows(String table) {
+    return database.sql("SELECT count(*) AS total FROM " + table)
+        .map(row -> row.get("total", Long.class)).one().block(TIMEOUT);
   }
 
   @SafeVarargs

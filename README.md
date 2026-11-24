@@ -20,7 +20,12 @@ Services depend only on `libs/*`. They never read another service's database.
 
 ## Store order saga
 
-`POST /orders` saves a `PLACED` order and returns `202`. The saga then runs
+`POST /orders` requires an `X-Idempotency-Key` UUID. Use one key per purchase
+and resend it on retries. A retry returns the original order with
+`X-Idempotency-Replayed: true`, and reusing a key for a different request
+returns `422`.
+
+The endpoint saves a `PLACED` order and returns `202`. The saga then runs
 asynchronously:
 
 ```text
@@ -58,6 +63,7 @@ curl -s localhost:13010/customers -H 'Content-Type: application/json' \
   -d '{"firstName":"Sam","lastName":"Rider","email":"sam@example.com"}'
 
 curl -s localhost:13010/orders -H 'Content-Type: application/json' \
+  -H "X-Idempotency-Key: $(uuidgen)" \
   -d '{"customerId":1,"lines":[{"productId":1,"quantity":2}]}'
 
 curl -s localhost:13030/sagas/<sagaId-from-the-order-response>
@@ -87,7 +93,6 @@ Saga timing can be changed through `horse.saga.orchestrator.*` and
 
 ## Known limitations
 
-- `POST /orders` has no idempotency key, so a client retry creates a second order.
 - The service APIs have no authentication. Compose binds the saga service ports
   to localhost.
 - The catalog API does not yet implement everything in the
