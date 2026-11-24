@@ -8,10 +8,12 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.r2dbc.core.DatabaseClient.GenericExecuteSpec;
 import org.springframework.stereotype.Repository;
 
+import com.coding2themax.horse.orchestrator.api.dto.SagaAttentionItem;
 import com.coding2themax.horse.orchestrator.api.dto.SagaResponse;
 import com.coding2themax.horse.orchestrator.api.dto.SagaStepResponse;
 import com.coding2themax.horse.orchestrator.domain.SagaInstance;
 import com.coding2themax.horse.orchestrator.domain.SagaState;
+import com.coding2themax.horse.orchestrator.domain.StuckStep;
 
 import io.r2dbc.spi.Readable;
 import reactor.core.publisher.Flux;
@@ -71,7 +73,8 @@ public class SagaStore {
   public Mono<Void> applyTransition(UUID sagaId, SagaState next, String command, String reason,
       double timeoutSeconds) {
     GenericExecuteSpec spec = database.sql("UPDATE saga_instance SET state = :state, current_command = :command, "
-        + "failure_reason = :reason, attempts = 0, step_deadline = " + DEADLINE + ", updated_at = now() "
+        + "failure_reason = :reason, attempts = 0, attention_alerted_at = NULL, step_deadline = " + DEADLINE
+        + ", updated_at = now() "
         + "WHERE saga_id = :sagaId")
         .bind("state", next.name())
         .bind("timeoutSeconds", timeoutSeconds)
@@ -99,6 +102,55 @@ public class SagaStore {
         .fetch().rowsUpdated().then();
   }
 
+  /** Ignored late replies also log a step, so only the step that entered the failed state counts. */
+  public Mono<StuckStep> findStuckStep(UUID sagaId) {
+    return database.sql("""
+        SELECT failed.from_state,
+          (SELECT entered.detail FROM saga_step_log entered
+           WHERE entered.saga_id = failed.saga_id AND entered.id < failed.id
+             AND entered.to_state = failed.from_state
+             AND entered.from_state IS DISTINCT FROM failed.from_state
+           ORDER BY entered.id DESC LIMIT 1) AS reason
+        FROM saga_step_log failed
+        WHERE failed.saga_id = :sagaId AND failed.to_state = 'FAILED_NEEDS_ATTENTION'
+          AND failed.from_state <> 'FAILED_NEEDS_ATTENTION'
+        ORDER BY failed.id DESC LIMIT 1
+        """)
+        .bind("sagaId", sagaId)
+        .map(row -> new StuckStep(SagaState.valueOf(row.get("from_state", String.class)),
+            row.get("reason", String.class)))
+        .one();
+  }
+
+  /** Marks stuck sagas as alerted and emits them. Concurrent callers get different sagas. */
+  public Flux<SagaAttentionItem> claimUnalerted(int limit) {
+    return database.sql("""
+        UPDATE saga_instance SET attention_alerted_at = now()
+        WHERE saga_id IN (
+          SELECT saga_id FROM saga_instance
+          WHERE state = 'FAILED_NEEDS_ATTENTION' AND attention_alerted_at IS NULL
+          ORDER BY updated_at LIMIT :limit FOR UPDATE SKIP LOCKED)
+        RETURNING saga_id, order_id, failure_reason, updated_at
+        """)
+        .bind("limit", limit)
+        .map(SagaStore::toAttentionItem)
+        .all();
+  }
+
+  public Mono<Long> countNeedingAttention() {
+    return database.sql("SELECT count(*) AS total FROM saga_instance WHERE state = 'FAILED_NEEDS_ATTENTION'")
+        .map(row -> row.get("total", Long.class))
+        .one();
+  }
+
+  public Flux<SagaAttentionItem> findNeedingAttention(int limit) {
+    return database.sql("SELECT saga_id, order_id, failure_reason, updated_at FROM saga_instance "
+        + "WHERE state = 'FAILED_NEEDS_ATTENTION' ORDER BY updated_at LIMIT :limit")
+        .bind("limit", limit)
+        .map(SagaStore::toAttentionItem)
+        .all();
+  }
+
   public Mono<SagaResponse> find(UUID sagaId) {
     Mono<List<SagaStepResponse>> steps = database.sql("SELECT from_state, to_state, trigger, detail, occurred_at "
         + "FROM saga_step_log WHERE saga_id = :sagaId ORDER BY id")
@@ -123,6 +175,11 @@ public class SagaStore {
     return new SagaInstance(row.get("saga_id", UUID.class), row.get("order_id", UUID.class),
         SagaState.valueOf(row.get("state", String.class)), row.get("current_command", String.class),
         row.get("failure_reason", String.class), row.get("attempts", Integer.class));
+  }
+
+  private static SagaAttentionItem toAttentionItem(Readable row) {
+    return new SagaAttentionItem(row.get("saga_id", UUID.class), row.get("order_id", UUID.class),
+        row.get("failure_reason", String.class), row.get("updated_at", OffsetDateTime.class));
   }
 
   private static GenericExecuteSpec nullable(GenericExecuteSpec spec, String name, String value) {

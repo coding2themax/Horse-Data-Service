@@ -56,4 +56,15 @@ public final class SagaDefinition {
       default -> throw new IllegalStateException("Saga is not active: " + saga.state());
     };
   }
+
+  /** Resumes a stalled compensation. Both commands are safe to repeat. */
+  public static Transition onManualRetry(SagaInstance saga, StuckStep stuck) {
+    return switch (stuck.state()) {
+      case RELEASING_STOCK -> new Transition(SagaState.RELEASING_STOCK, new ReleaseStock(saga.orderId()),
+          stuck.reason());
+      case CANCELLING_ORDER -> new Transition(SagaState.CANCELLING_ORDER,
+          new CancelOrder(saga.orderId(), stuck.reason()), stuck.reason());
+      default -> throw new IllegalStateException("Not a compensation step: " + stuck.state());
+    };
+  }
 }

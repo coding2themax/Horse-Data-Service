@@ -2,7 +2,9 @@ package com.coding2themax.horse.orchestrator.application;
 
 import java.util.UUID;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.coding2themax.horse.orchestrator.domain.SagaDefinition;
 import com.coding2themax.horse.orchestrator.domain.SagaInstance;
@@ -53,6 +55,17 @@ public class SagaOrchestrator {
     return store.lockExpired(sagaId).flatMap(saga -> saga.attempts() < properties.maxRetries()
         ? retry(saga)
         : apply(saga, SagaDefinition.onRetriesExhausted(saga), "TIMEOUT"));
+  }
+
+  /** Resumes the compensation that stalled. Must run in a transaction. */
+  public Mono<Void> retryFailed(UUID sagaId) {
+    return store.lock(sagaId)
+        .switchIfEmpty(Mono.error(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Saga not found")))
+        .flatMap(saga -> saga.state() == SagaState.FAILED_NEEDS_ATTENTION
+            ? store.findStuckStep(sagaId)
+                .switchIfEmpty(Mono.error(() -> new IllegalStateException("No stuck step for saga " + sagaId)))
+                .flatMap(stuck -> apply(saga, SagaDefinition.onManualRetry(saga, stuck), "MANUAL_RETRY"))
+            : Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, "Saga is " + saga.state())));
   }
 
   private Mono<Void> start(UUID sagaId, OrderPlaced placed) {
