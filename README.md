@@ -40,7 +40,7 @@ Approval fails:  ApproveOrder -> OrderApprovalFailed -> ReleaseStock -> StockRel
 - **Timeouts:** a stalled step is retried, 3 times by default, 30 seconds apart.
   A stalled forward step then compensates.
 - **Manual follow-up:** a saga whose compensation stalls moves to
-  `FAILED_NEEDS_ATTENTION`. It is recorded but does not raise an alert yet.
+  `FAILED_NEEDS_ATTENTION`. See [Stuck sagas](#stuck-sagas).
 
 Messages that still fail after retries go to `<topic>.dlt`.
 
@@ -81,6 +81,22 @@ Requires JDK 21 and a running Docker engine for Testcontainers.
 ./mvnw verify                              # all tests and the 90% per-package coverage gate
 ./mvnw -pl services/stock-service -am test # one service and the libraries it needs
 ```
+
+## Stuck sagas
+
+The orchestrator logs one `ERROR` starting with `Saga needs attention:` for each
+stuck saga, and publishes the current count as the `saga.needs.attention` metric.
+Connect your log or metric alerting to one of these.
+
+```bash
+curl -s localhost:13030/actuator/metrics/saga.needs.attention
+curl -s localhost:13030/sagas/attention
+curl -s -X POST localhost:13030/sagas/<sagaId>/retry
+```
+
+Fix the cause first, such as a stopped service. Retrying resumes the stalled
+release or cancel and is safe to repeat. If it stalls again, the saga returns to
+`FAILED_NEEDS_ATTENTION` and raises a new alert.
 
 ## Configuration
 

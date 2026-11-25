@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -22,8 +23,11 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -38,11 +42,13 @@ import org.testcontainers.kafka.KafkaContainer;
 
 import com.coding2themax.horse.orchestrator.api.dto.SagaResponse;
 import com.coding2themax.horse.orchestrator.application.OrchestratorProperties;
+import com.coding2themax.horse.orchestrator.application.SagaAttentionMonitor;
 import com.coding2themax.horse.orchestrator.application.SagaOrchestrator;
 import com.coding2themax.horse.orchestrator.application.SagaTimeoutSweeper;
 import com.coding2themax.horse.orchestrator.domain.SagaDefinition;
 import com.coding2themax.horse.orchestrator.domain.SagaInstance;
 import com.coding2themax.horse.orchestrator.domain.SagaState;
+import com.coding2themax.horse.orchestrator.domain.StuckStep;
 import com.coding2themax.horse.orchestrator.infrastructure.SagaStore;
 import com.coding2themax.horse.saga.contracts.OrderLine;
 import com.coding2themax.horse.saga.contracts.PricedLine;
@@ -69,6 +75,7 @@ import com.coding2themax.horse.saga.messaging.SagaMessageHandler;
     "horse.saga.orchestrator.sweep-enabled=false",
     "horse.saga.orchestrator.max-retries=2" })
 @Testcontainers
+@ExtendWith(OutputCaptureExtension.class)
 class SagaOrchestratorIntegrationTest {
 
   private static final Duration TIMEOUT = Duration.ofSeconds(30);
@@ -101,6 +108,8 @@ class SagaOrchestratorIntegrationTest {
   private SagaStore store;
   @Autowired
   private SagaTimeoutSweeper sweeper;
+  @Autowired
+  private SagaAttentionMonitor attentionMonitor;
   @Autowired
   private SagaMessageHandler handler;
   @Autowired
@@ -270,6 +279,131 @@ class SagaOrchestratorIntegrationTest {
   }
 
   @Test
+  void retryResumesStuckCancelWithOriginalReason() {
+    stuckInCancelling();
+
+    web.post().uri("/sagas/{id}/retry", saga).exchange().expectStatus().isAccepted()
+        .expectBody().jsonPath("$.state").isEqualTo("CANCELLING_ORDER")
+        .jsonPath("$.failureReason").isEqualTo("Insufficient stock");
+
+    CancelOrder cancel = assertInstanceOf(CancelOrder.class, lastCommand());
+    assertEquals("Insufficient stock", cancel.reason());
+    receive(new OrderCancelled(order));
+    assertEquals(SagaState.CANCELLED, state());
+    assertEquals("Insufficient stock", view().failureReason());
+  }
+
+  @Test
+  void retryResumesStuckReleaseThenCancels() {
+    stuckInReleasing();
+
+    retry().expectStatus().isAccepted();
+
+    assertInstanceOf(ReleaseStock.class, lastCommand());
+    assertEquals(SagaState.RELEASING_STOCK, state());
+    receive(new StockReleased(order));
+    CancelOrder cancel = assertInstanceOf(CancelOrder.class, lastCommand());
+    assertEquals("Price changed", cancel.reason());
+    receive(new OrderCancelled(order));
+    assertEquals(SagaState.CANCELLED, state());
+  }
+
+  @Test
+  void repeatedStallKeepsOriginalReasonAndCanRetryAgain() {
+    stuckInCancelling();
+    retry().expectStatus().isAccepted();
+    expireAndSweep();
+    expireAndSweep();
+    expireAndSweep();
+    assertEquals(SagaState.FAILED_NEEDS_ATTENTION, state());
+
+    retry().expectStatus().isAccepted();
+
+    assertEquals("Insufficient stock", view().failureReason());
+    assertEquals("Insufficient stock", assertInstanceOf(CancelOrder.class, lastCommand()).reason());
+  }
+
+  @Test
+  void lateReplyWhileStuckDoesNotChangeRetriedStep() {
+    stuckInReleasing();
+    receive(new StockReleased(order));
+    assertEquals(SagaState.FAILED_NEEDS_ATTENTION, state());
+
+    retry().expectStatus().isAccepted();
+
+    assertEquals(SagaState.RELEASING_STOCK, state());
+    assertInstanceOf(ReleaseStock.class, lastCommand());
+  }
+
+  @Test
+  void retryRejectsSagasThatAreNotStuck() {
+    receive(new OrderPlaced(order, LINES));
+    retry().expectStatus().isEqualTo(409);
+    assertEquals(1, commands().size());
+
+    web.post().uri("/sagas/not-a-uuid/retry").exchange().expectStatus().isBadRequest();
+    web.post().uri("/sagas/{id}/retry", UUID.randomUUID()).exchange().expectStatus().isNotFound();
+  }
+
+  @Test
+  void repeatedRetryRequestSendsOneCommand() {
+    stuckInCancelling();
+    long before = commandCount(CancelOrder.class);
+
+    retry().expectStatus().isAccepted();
+    retry().expectStatus().isEqualTo(409);
+
+    assertEquals(before + 1, commandCount(CancelOrder.class));
+  }
+
+  @Test
+  void stuckSagaAlertsOnceAndAgainAfterNewStall(CapturedOutput output) {
+    stuckInCancelling();
+    String alert = "Saga needs attention: sagaId=" + saga;
+
+    assertEquals(1L, attentionMonitor.checkOnce().block(TIMEOUT));
+    assertEquals(1L, attentionMonitor.checkOnce().block(TIMEOUT));
+    assertEquals(1, occurrences(output.getOut(), alert));
+
+    retry().expectStatus().isAccepted();
+    assertEquals(0L, attentionMonitor.checkOnce().block(TIMEOUT));
+    expireAndSweep();
+    expireAndSweep();
+    expireAndSweep();
+    assertEquals(1L, attentionMonitor.checkOnce().block(TIMEOUT));
+    assertEquals(2, occurrences(output.getOut(), alert));
+  }
+
+  @Test
+  void attentionApiAndMetricReportStuckSagas() {
+    web.get().uri("/sagas/attention").exchange().expectStatus().isOk()
+        .expectBody().jsonPath("$.total").isEqualTo(0).jsonPath("$.sagas.length()").isEqualTo(0);
+    stuckInCancelling();
+    attentionMonitor.checkOnce().block(TIMEOUT);
+
+    web.get().uri("/sagas/attention").exchange().expectStatus().isOk()
+        .expectBody()
+        .jsonPath("$.total").isEqualTo(1)
+        .jsonPath("$.sagas[0].sagaId").isEqualTo(saga.toString())
+        .jsonPath("$.sagas[0].orderId").isEqualTo(order.toString());
+    web.get().uri("/actuator/metrics/saga.needs.attention").exchange().expectStatus().isOk()
+        .expectBody().jsonPath("$.measurements[0].value").isEqualTo(1.0);
+
+    retry().expectStatus().isAccepted();
+    attentionMonitor.checkOnce().block(TIMEOUT);
+    web.get().uri("/actuator/metrics/saga.needs.attention").exchange().expectStatus().isOk()
+        .expectBody().jsonPath("$.measurements[0].value").isEqualTo(0.0);
+  }
+
+  @Test
+  void definitionRejectsManualRetryOfForwardStep() {
+    SagaInstance stuck = new SagaInstance(saga, order, SagaState.FAILED_NEEDS_ATTENTION, null, "failed", 0);
+
+    assertThrows(IllegalStateException.class,
+        () -> SagaDefinition.onManualRetry(stuck, new StuckStep(SagaState.APPROVING_ORDER, "failed")));
+  }
+
+  @Test
   void sweepIgnoresSagasBeforeDeadline() {
     receive(new OrderPlaced(order, LINES));
 
@@ -282,7 +416,7 @@ class SagaOrchestratorIntegrationTest {
     receive(new OrderPlaced(order, LINES));
     expire();
     SagaTimeoutSweeper loop = new SagaTimeoutSweeper(store, orchestrator, transactionManager,
-        new OrchestratorProperties(Duration.ofMinutes(1), 2, true, Duration.ofMillis(20), 10));
+        new OrchestratorProperties(Duration.ofMinutes(1), 2, true, Duration.ofMillis(20), 10), attentionMonitor);
 
     loop.start();
     loop.start();
@@ -333,6 +467,33 @@ class SagaOrchestratorIntegrationTest {
     ReserveStock reserve = assertInstanceOf(ReserveStock.class, command);
     assertEquals(order, reserve.orderId());
     assertNotEquals(SagaState.COMPLETED, state());
+  }
+
+  private void stuckInCancelling() {
+    receive(new OrderPlaced(order, LINES));
+    receive(new StockRejected(order, "Insufficient stock"));
+    expireAndSweep();
+    expireAndSweep();
+    expireAndSweep();
+    assertEquals(SagaState.FAILED_NEEDS_ATTENTION, state());
+  }
+
+  private void stuckInReleasing() {
+    receive(new OrderPlaced(order, LINES));
+    receive(new StockReserved(order, PRICED));
+    receive(new OrderApprovalFailed(order, "Price changed"));
+    expireAndSweep();
+    expireAndSweep();
+    expireAndSweep();
+    assertEquals(SagaState.FAILED_NEEDS_ATTENTION, state());
+  }
+
+  private WebTestClient.ResponseSpec retry() {
+    return web.post().uri("/sagas/{id}/retry", saga).exchange();
+  }
+
+  private static int occurrences(String text, String value) {
+    return text.split(Pattern.quote(value), -1).length - 1;
   }
 
   private void receive(SagaMessage message) {

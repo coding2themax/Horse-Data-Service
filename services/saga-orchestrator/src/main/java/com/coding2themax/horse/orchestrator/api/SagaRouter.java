@@ -11,6 +11,11 @@ public class SagaRouter {
 
   @Bean
   public RouterFunction<ServerResponse> sagaRoutes(SagaHandler handler) {
-    return RouterFunctions.route().GET("/sagas/{id}", handler::get).build();
+    return RouterFunctions.route()
+        // Listed first so "attention" is not read as a saga id.
+        .GET("/sagas/attention", handler::needingAttention)
+        .GET("/sagas/{id}", handler::get)
+        .POST("/sagas/{id}/retry", handler::retry)
+        .build();
   }
 }

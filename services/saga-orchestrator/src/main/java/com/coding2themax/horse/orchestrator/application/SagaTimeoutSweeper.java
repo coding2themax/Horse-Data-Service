@@ -23,16 +23,19 @@ public class SagaTimeoutSweeper implements SmartLifecycle {
   private final SagaOrchestrator orchestrator;
   private final TransactionalOperator transaction;
   private final OrchestratorProperties properties;
+  private final SagaAttentionMonitor attentionMonitor;
   private volatile boolean running;
   private Sinks.Empty<Void> stopRequested;
   private Sinks.Empty<Void> stopped;
 
   public SagaTimeoutSweeper(SagaStore store, SagaOrchestrator orchestrator,
-      ReactiveTransactionManager transactionManager, OrchestratorProperties properties) {
+      ReactiveTransactionManager transactionManager, OrchestratorProperties properties,
+      SagaAttentionMonitor attentionMonitor) {
     this.store = store;
     this.orchestrator = orchestrator;
     this.transaction = TransactionalOperator.create(transactionManager);
     this.properties = properties;
+    this.attentionMonitor = attentionMonitor;
   }
 
   /** Emits the number of expired sagas processed. One failure does not stop the others. */
@@ -64,7 +67,10 @@ public class SagaTimeoutSweeper implements SmartLifecycle {
         .concatMap(tick -> sweepOnce().onErrorResume(error -> {
           LOGGER.warn("Saga timeout sweep failed", error);
           return Mono.empty();
-        }), 1)
+        }).then(attentionMonitor.checkOnce().onErrorResume(error -> {
+          LOGGER.warn("Saga attention check failed", error);
+          return Mono.empty();
+        })), 1)
         .doFinally(signal -> {
           running = false;
           finished.tryEmitEmpty();
