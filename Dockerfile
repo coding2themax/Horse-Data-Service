@@ -11,6 +11,8 @@ RUN --mount=type=cache,target=/root/.m2,sharing=locked \
 FROM eclipse-temurin:21-jre-alpine
 ARG SERVICE_PORT=13000
 WORKDIR /app
+RUN addgroup -S app && adduser -S -G app app
 COPY --from=build /app.jar /app/app.jar
+USER app
 EXPOSE ${SERVICE_PORT}
 ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -1,0 +1,177 @@
+name: Publish Images
+
+# Builds one Docker image per service and pushes each to its own Amazon ECR
+# repository when a GitHub release is published, or when called by the Create
+# Release workflow. Drafts and prereleases do not publish images. Release tags
+# must be vMAJOR.MINOR.PATCH.
+#
+# The release commit must be on main and have a successful "CI" run. A release
+# tag already in an ECR repository is never rebuilt, and "latest" only moves for
+# the repository's latest release.
+#
+# Required repository variables (Settings > Secrets and variables > Actions > Variables):
+#   AWS_REGION    e.g. us-east-1
+#   AWS_ROLE_ARN  IAM role GitHub assumes via OIDC, allowed to push to the four
+#                 ECR repositories below and to call ecr:DescribeImages on them
+
+on:
+  release:
+    types: [released]
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to publish, as vMAJOR.MINOR.PATCH
+        required: true
+        type: string
+      commit:
+        description: Full SHA of the release commit
+        required: true
+        type: string
+
+# A literal group: in a called workflow, github.workflow is the caller's name.
+concurrency:
+  group: publish-images
+  cancel-in-progress: false
+
+permissions:
+  actions: read # look up the CI run for the release commit
+  contents: read
+  id-token: write # OIDC token for AWS
+
+env:
+  COMMIT_SHA: ${{ inputs.commit || github.sha }}
+  RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      latest: ${{ steps.release.outputs.latest }}
+    steps:
+      - name: Verify release tag format
+        run: |
+          number='(0|[1-9][0-9]*)'
+          if ! [[ "$RELEASE_TAG" =~ ^v$number\.$number\.$number$ ]]; then
+            echo "::error::Release tag must be vMAJOR.MINOR.PATCH, for example v1.2.0."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.COMMIT_SHA }}
+          fetch-depth: 0 # full history for the ancestry check
+
+      # Use the full ref so a tag named "main" cannot satisfy the check.
+      - name: Verify commit is on main
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$COMMIT_SHA" refs/remotes/origin/main; then
+            echo "::error::$COMMIT_SHA is not on main, refusing to publish."
+            exit 1
+          fi
+
+      # The Docker builds skip tests, so the release relies on this check.
+      - name: Verify CI passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          passed=$(gh run list --workflow maven-build.yml --commit "$COMMIT_SHA" \
+            --status success --limit 1 --json databaseId --jq length)
+          if [ "$passed" -eq 0 ]; then
+            echo "::error::$COMMIT_SHA has no successful CI run, refusing to publish."
+            exit 1
+          fi
+
+      - name: Check whether this is the latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          if [ "$current" = "$RELEASE_TAG" ]; then
+            echo "latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "latest=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: horse-catalog-service
+            ecr_repository: horse-catalog-service
+            port: 13000
+          - module: order-service
+            ecr_repository: horse-order-service
+            port: 13010
+          - module: stock-service
+            ecr_repository: horse-stock-service
+            port: 13020
+          - module: saga-orchestrator
+            ecr_repository: horse-saga-orchestrator
+            port: 13030
+    name: publish (${{ matrix.ecr_repository }})
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Any error other than "not found" fails the job rather than risk an overwrite.
+      - name: Check for existing image
+        id: published
+        env:
+          ECR_REPOSITORY: ${{ matrix.ecr_repository }}
+        run: |
+          if output=$(aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
+              --image-ids "imageTag=$RELEASE_TAG" 2>&1); then
+            echo "::notice::$ECR_REPOSITORY:$RELEASE_TAG is already published, skipping."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif grep -q ImageNotFoundException <<< "$output"; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$output" >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.published.outputs.exists != 'true'
+        with:
+          ref: ${{ env.COMMIT_SHA }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        if: steps.published.outputs.exists != 'true'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - if: steps.published.outputs.exists != 'true'
+        uses: docker/setup-buildx-action@v4
+
+      - name: Image tags
+        id: meta
+        if: steps.published.outputs.exists != 'true'
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.ecr.outputs.registry }}/${{ matrix.ecr_repository }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ env.RELEASE_TAG }}
+            type=raw,value=latest,enable=${{ needs.verify.outputs.latest }}
+
+      - name: Build and push
+        if: steps.published.outputs.exists != 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          build-args: |
+            MODULE=${{ matrix.module }}
+            SERVICE_PORT=${{ matrix.port }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.module }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.module }}
