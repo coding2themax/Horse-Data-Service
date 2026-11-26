@@ -1,6 +1,8 @@
 # Horse Data Service
 
-[![coverage](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service)
+[![Maven Tests](https://github.com/coding2themax/Horse-Data-Service/actions/workflows/maven-build.yml/badge.svg)](https://github.com/coding2themax/Horse-Data-Service/actions/workflows/maven-build.yml)
+[![codecov](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 A Maven monorepo of independently deployable Spring Boot WebFlux applications.
 The store order flow uses an orchestrated saga over Kafka, and each application
@@ -121,7 +123,7 @@ tagged with the release version. The newest release also receives the `latest` t
 | `services/stock-service` | `horse-stock-service` |
 | `services/saga-orchestrator` | `horse-saga-orchestrator` |
 
-Before you start, merge the changes into `main` and confirm that **CI** passed for
+Before you start, merge the changes into `main` and confirm that **Maven Tests** passed for
 the commit you want to release. Versions use `MAJOR.MINOR.PATCH`.
 
 Run the **Create Release** workflow from the Actions tab with `main` selected, or
@@ -132,7 +134,7 @@ gh workflow run release.yml -f version=1.2.0
 gh run watch
 ```
 
-The workflow checks the version, commit and CI result, creates the `v1.2.0` tag
+The workflow checks the version, commit and Maven Tests result, creates the `v1.2.0` tag
 and GitHub release, and publishes all four images. Publishing a `v1.2.0` release
 from the **Releases** page also publishes them. Drafts and prereleases do not. A
 tag already in an ECR repository is never rebuilt.

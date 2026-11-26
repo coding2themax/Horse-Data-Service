@@ -30,7 +30,7 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     permissions:
-      actions: read # look up the CI run for the release commit
+      actions: read # look up the Maven Tests run for the release commit
       contents: read
     outputs:
       tag: ${{ steps.version.outputs.tag }}
@@ -93,7 +93,7 @@ jobs:
             exit 1
           fi
 
-      - name: Verify CI passed
+      - name: Verify Maven Tests passed
         env:
           GH_TOKEN: ${{ github.token }}
           COMMIT_SHA: ${{ steps.commit.outputs.sha }}
@@ -101,7 +101,7 @@ jobs:
           passed=$(gh run list --workflow maven-build.yml --commit "$COMMIT_SHA" \
             --status success --limit 1 --json databaseId --jq length)
           if [ "$passed" -eq 0 ]; then
-            echo "::error::$COMMIT_SHA has no successful CI run, refusing to release."
+            echo "::error::$COMMIT_SHA has no successful Maven Tests run, refusing to release."
             exit 1
           fi
 
