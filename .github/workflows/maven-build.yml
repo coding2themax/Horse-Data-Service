@@ -29,4 +29,83 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: Build, test, and enforce coverage
+        id: build
         run: ./mvnw -B -ntp verify
+
+      - name: Upload coverage – saga-contracts
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: libs/saga-contracts/target/site/jacoco/jacoco.xml
+          disable_search: true
+          flags: saga-contracts
+          name: saga-contracts
+          network_filter: libs/saga-contracts/
+          network_prefix: ""
+          fail_ci_if_error: false
+
+      - name: Upload coverage – saga-messaging
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: libs/saga-messaging/target/site/jacoco/jacoco.xml
+          disable_search: true
+          flags: saga-messaging
+          name: saga-messaging
+          network_filter: libs/saga-messaging/
+          network_prefix: ""
+          fail_ci_if_error: false
+
+      - name: Upload coverage – horse-catalog-service
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: services/horse-catalog-service/target/site/jacoco/jacoco.xml
+          disable_search: true
+          flags: horse-catalog-service
+          name: horse-catalog-service
+          network_filter: services/horse-catalog-service/
+          network_prefix: ""
+          fail_ci_if_error: false
+
+      - name: Upload coverage – stock-service
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: services/stock-service/target/site/jacoco/jacoco.xml
+          disable_search: true
+          flags: stock-service
+          name: stock-service
+          network_filter: services/stock-service/
+          network_prefix: ""
+          fail_ci_if_error: false
+
+      - name: Upload coverage – order-service
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: services/order-service/target/site/jacoco/jacoco.xml
+          disable_search: true
+          flags: order-service
+          name: order-service
+          network_filter: services/order-service/
+          network_prefix: ""
+          fail_ci_if_error: false
+
+      - name: Upload coverage – saga-orchestrator
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: services/saga-orchestrator/target/site/jacoco/jacoco.xml
+          disable_search: true
+          flags: saga-orchestrator
+          name: saga-orchestrator
+          network_filter: services/saga-orchestrator/
+          network_prefix: ""
+          fail_ci_if_error: false

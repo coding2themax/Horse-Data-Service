@@ -1,5 +1,13 @@
 # Horse Data Service
 
+[![coverage](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service)
+[![saga-contracts](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=saga-contracts)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags)
+[![saga-messaging](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=saga-messaging)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags)
+[![horse-catalog-service](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=horse-catalog-service)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags)
+[![stock-service](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=stock-service)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags)
+[![order-service](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=order-service)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags)
+[![saga-orchestrator](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=saga-orchestrator)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags)
+
 A Maven monorepo of independently deployable Spring Boot WebFlux applications.
 The store order flow uses an orchestrated saga over Kafka, and each application
 owns its own Postgres database.

@@ -1,0 +1,70 @@
+codecov:
+  require_ci_to_pass: false # still show coverage when the JaCoCo gate fails
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: 80%
+
+comment:
+  layout: "header, diff, flags, components, files"
+  show_carryforward_flags: true
+
+flag_management:
+  default_rules:
+    carryforward: true
+  individual_flags:
+    - name: saga-contracts
+      paths:
+        - libs/saga-contracts/
+    - name: saga-messaging
+      paths:
+        - libs/saga-messaging/
+    - name: horse-catalog-service
+      paths:
+        - services/horse-catalog-service/
+    - name: stock-service
+      paths:
+        - services/stock-service/
+    - name: order-service
+      paths:
+        - services/order-service/
+    - name: saga-orchestrator
+      paths:
+        - services/saga-orchestrator/
+
+component_management:
+  individual_components:
+    - component_id: saga-contracts
+      name: saga-contracts
+      paths:
+        - libs/saga-contracts/**
+    - component_id: saga-messaging
+      name: saga-messaging
+      paths:
+        - libs/saga-messaging/**
+    - component_id: horse-catalog-service
+      name: horse-catalog-service
+      paths:
+        - services/horse-catalog-service/**
+    - component_id: stock-service
+      name: stock-service
+      paths:
+        - services/stock-service/**
+    - component_id: order-service
+      name: order-service
+      paths:
+        - services/order-service/**
+    - component_id: saga-orchestrator
+      name: saga-orchestrator
+      paths:
+        - services/saga-orchestrator/**
+
+ignore:
+  - "tests/**"
+  - "**/*Application.java" # matches the JaCoCo excludes in the service poms
