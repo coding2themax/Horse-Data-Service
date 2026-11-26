@@ -5,7 +5,7 @@ name: Publish Images
 # Release workflow. Drafts and prereleases do not publish images. Release tags
 # must be vMAJOR.MINOR.PATCH.
 #
-# The release commit must be on main and have a successful "CI" run. A release
+# The release commit must be on main and have a successful "Maven Tests" run. A release
 # tag already in an ECR repository is never rebuilt, and "latest" only moves for
 # the repository's latest release.
 #
@@ -34,7 +34,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  actions: read # look up the CI run for the release commit
+  actions: read # look up the Maven Tests run for the release commit
   contents: read
   id-token: write # OIDC token for AWS
 
@@ -71,14 +71,14 @@ jobs:
           fi
 
       # The Docker builds skip tests, so the release relies on this check.
-      - name: Verify CI passed
+      - name: Verify Maven Tests passed
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           passed=$(gh run list --workflow maven-build.yml --commit "$COMMIT_SHA" \
             --status success --limit 1 --json databaseId --jq length)
           if [ "$passed" -eq 0 ]; then
-            echo "::error::$COMMIT_SHA has no successful CI run, refusing to publish."
+            echo "::error::$COMMIT_SHA has no successful Maven Tests run, refusing to publish."
             exit 1
           fi
 
