@@ -1,12 +1,6 @@
 # Horse Data Service
 
 [![coverage](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service)
-[![saga-contracts](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=saga-contracts)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags)
-[![saga-messaging](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=saga-messaging)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags)
-[![horse-catalog-service](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=horse-catalog-service)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags)
-[![stock-service](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=stock-service)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags)
-[![order-service](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=order-service)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags)
-[![saga-orchestrator](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=saga-orchestrator)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags)
 
 A Maven monorepo of independently deployable Spring Boot WebFlux applications.
 The store order flow uses an orchestrated saga over Kafka, and each application
@@ -14,15 +8,15 @@ owns its own Postgres database.
 
 ## Applications
 
-| Module | Port | Database | Responsibility |
-|---|---|---|---|
-| `services/horse-catalog-service` | 13000 | `horse-data-service` | Horses and horse goods |
-| `services/order-service` | 13010 | `horse_orders` | Customers and orders |
-| `services/stock-service` | 13020 | `horse_stock` | Products, prices, stock reservations |
-| `services/saga-orchestrator` | 13030 | `horse_saga` | Saga state, compensation, timeouts |
-| `libs/saga-contracts` | | | Saga messages and Kafka topic names |
-| `libs/saga-messaging` | | | Outbox, inbox, relay, retries, dead-lettering |
-| `tests/saga-e2e` | | | Black-box tests of the real service jars |
+| Module | Coverage | Port | Database | Responsibility |
+|---|---|---|---|---|
+| `services/horse-catalog-service` | [![horse-catalog-service coverage](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=horse-catalog-service)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags) | 13000 | `horse-data-service` | Horses and horse goods |
+| `services/order-service` | [![order-service coverage](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=order-service)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags) | 13010 | `horse_orders` | Customers and orders |
+| `services/stock-service` | [![stock-service coverage](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=stock-service)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags) | 13020 | `horse_stock` | Products, prices, stock reservations |
+| `services/saga-orchestrator` | [![saga-orchestrator coverage](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=saga-orchestrator)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags) | 13030 | `horse_saga` | Saga state, compensation, timeouts |
+| `libs/saga-contracts` | [![saga-contracts coverage](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=saga-contracts)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags) | | | Saga messages and Kafka topic names |
+| `libs/saga-messaging` | [![saga-messaging coverage](https://codecov.io/gh/coding2themax/Horse-Data-Service/branch/main/graph/badge.svg?flag=saga-messaging)](https://app.codecov.io/gh/coding2themax/Horse-Data-Service/flags) | | | Outbox, inbox, relay, retries, dead-lettering |
+| `tests/saga-e2e` | n/a | | | Black-box tests of the real service jars |
 
 Services depend only on `libs/*`. They never read another service's database.
 
