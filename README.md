@@ -109,6 +109,37 @@ read `KAFKA_BOOTSTRAP_SERVERS`.
 Saga timing can be changed through `horse.saga.orchestrator.*` and
 `horse.saga.messaging.*` properties.
 
+## Releasing
+
+Each release publishes one image per service to its own Amazon ECR repository,
+tagged with the release version. The newest release also receives the `latest` tag.
+
+| Module | ECR repository |
+|---|---|
+| `services/horse-catalog-service` | `horse-catalog-service` |
+| `services/order-service` | `horse-order-service` |
+| `services/stock-service` | `horse-stock-service` |
+| `services/saga-orchestrator` | `horse-saga-orchestrator` |
+
+Before you start, merge the changes into `main` and confirm that **CI** passed for
+the commit you want to release. Versions use `MAJOR.MINOR.PATCH`.
+
+Run the **Create Release** workflow from the Actions tab with `main` selected, or
+from the GitHub CLI:
+
+```bash
+gh workflow run release.yml -f version=1.2.0
+gh run watch
+```
+
+The workflow checks the version, commit and CI result, creates the `v1.2.0` tag
+and GitHub release, and publishes all four images. Publishing a `v1.2.0` release
+from the **Releases** page also publishes them. Drafts and prereleases do not. A
+tag already in an ECR repository is never rebuilt.
+
+Publishing needs the repository variables `AWS_REGION` and `AWS_ROLE_ARN`. The
+role is assumed through GitHub OIDC and may push to the four repositories above.
+
 ## Known limitations
 
 - The service APIs have no authentication. Compose binds the saga service ports
